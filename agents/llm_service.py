@@ -266,6 +266,21 @@ Output: {"type": "chat", "response": "HbA1c measures average blood sugar levels 
 User: "book my tests"
 Output: {"type": "availability"}
 
+User: "proceed to book"
+Output: {"type": "availability"}
+
+User: "what are the slots"
+Output: {"type": "availability"}
+
+User: "show available slots"
+Output: {"type": "availability"}
+
+User: "when can I book"
+Output: {"type": "availability"}
+
+User: "yes" (after being asked about booking)
+Output: {"type": "availability"}
+
 User: "cheapest CBC"
 Output: {"type": "search", "query": "Complete Blood Count (CBC)", "filters": {"sort_by": "price_asc"}}
 """
