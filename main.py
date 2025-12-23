@@ -220,9 +220,18 @@ async def chat(request: ChatRequest):
             result = agent.book_appointment(doc_id, date_str, first_slot['id'], "web_user")
             
             if result['status'] == 'success':
+                # Detect consultation mode from the original request
+                lower_msg = request.message.lower()
+                is_video = "video" in lower_msg
+                
                 message = f"✅ Success! Appointment ID: {result['appointment_id']}\n"
                 message += f"Confirmed with {schedule['doctor']} for {date_str} at {first_slot['time']}.\n"
-                message += "Please arrive 15 mins early."
+                
+                # Context-aware instruction based on consultation type
+                if is_video:
+                    message += "Please join the video call 5 mins early. You'll receive a link via email."
+                else:
+                    message += "Please arrive 15 mins early."
             else:
                 message = f"❌ Booking failed: {result['message']}"
             
