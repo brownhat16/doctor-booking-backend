@@ -194,9 +194,29 @@ class LabTestDatabase:
         query_lower = query.lower()
         results = []
         
+        # Extract base query without parentheses for better matching
+        # "Complete Blood Count (CBC)" -> "Complete Blood Count"
+        base_query = query_lower.split('(')[0].strip() if '(' in query_lower else query_lower
+        
+        # Also extract abbreviation if present
+        # "Complete Blood Count (CBC)" -> "cbc"
+        abbrev = None
+        if '(' in query_lower and ')' in query_lower:
+            abbrev = query_lower.split('(')[1].split(')')[0].strip()
+        
         for test in self.tests:
-            if (query_lower in test.name.lower() or 
-                query_lower in test.category.lower()):
+            test_name_lower = test.name.lower()
+            test_category_lower = test.category.lower()
+            
+            # Match if:
+            # 1. Base query is in test name
+            # 2. Abbreviation matches (e.g., "cbc" in "Complete Blood Count")
+            # 3. Query is in category
+            # 4. Original query matches
+            if (base_query in test_name_lower or 
+                query_lower in test_name_lower or 
+                query_lower in test_category_lower or
+                (abbrev and abbrev in test_name_lower.lower())):
                 results.append(test)
         
         # Apply filters
