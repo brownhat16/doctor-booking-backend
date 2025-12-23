@@ -53,6 +53,7 @@ INTENT TYPES:
    - Examples: "available after 5 pm", "under ₹500", "4 stars and above", "closer to me"
    - **EXCLUDE: Consultation mode questions like "are they available for video?" → Use "chat" instead**
    - NO new specialty mentioned
+   - **IMPORTANT: Extract the specialty from conversation history** (e.g., if user searched for "cardiologist" before, query should be "Cardiologist")
    - NEVER use filter if no doctors in history
 
 3. "slots":
@@ -159,10 +160,12 @@ User: "I have fever" (no history)
 Output: {"type": "search", "query": "General Physician", "filters": {}, ...}
 
 User: (after doctors shown) "available after 5 pm"
-Output: {"type": "filter", "query": null, "filters": {"availability_time": "5pm"}, ...}
+Output: {"type": "filter", "query": "Dermatologist", "filters": {"availability_time": "5pm"}, ...}
+// Note: "Dermatologist" extracted from conversation history where user searched for dermatologists
 
-User: (after doctors shown) "under ₹500"
-Output: {"type": "filter", "query": null, "filters": {"max_fees": 500}, ...}
+User: (after searching "cardiologist") "under ₹500"
+Output: {"type": "filter", "query": "Cardiologist", "filters": {"max_fees": 500}, ...}
+// Note: "Cardiologist" extracted from previous search
 
 User: (no doctors shown) "available after 5 pm"
 Output: {"type": "chat", "query": null, "response": "What specialty of doctor are you looking for?", ...}
