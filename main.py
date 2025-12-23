@@ -364,7 +364,15 @@ async def handle_lab_test_query(request: ChatRequest, history_tuples: list):
     
     if intent_type == "add_to_cart":
         result = lab_agent.add_to_cart(session_id, intent_data.get("test_id"), intent_data.get("lab_id"))
-        return ChatResponse(type="cart_updated", message=result['message'], data=result)
+        cart_data = lab_agent.view_cart(session_id)
+        # Better response with next steps
+        msg = f"✅ {result['message']}\n\n"
+        msg += f"🛒 **Your Cart:** {cart_data['cart_count']} test(s), Total: ₹{cart_data['cart_total']}\n\n"
+        msg += "What would you like to do next?\n"
+        msg += "• Search for more tests\n"
+        msg += "• Say **'view cart'** to see all items\n"
+        msg += "• Say **'proceed to book'** when ready"
+        return ChatResponse(type="cart_updated", message=msg, data=result)
     
     if intent_type == "view_cart":
         cart_data = lab_agent.view_cart(session_id)
