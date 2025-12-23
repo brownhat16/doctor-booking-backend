@@ -50,6 +50,7 @@ class Doctor(BaseModel):
     rating: float = Field(..., ge=0, le=5)
     reviews_count: int = 0
     availability: List[DayAvailability]
+    consultation_modes: List[str] = ["clinic"] # Default to clinic only if not specified
 
 class Appointment(BaseModel):
     appointment_id: str

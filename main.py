@@ -52,6 +52,16 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.get("/api/specialties")
+async def get_specialties():
+    """Return list of supported medical specialties"""
+    # Matching the frontend list
+    return [
+        "General Physician", "Dermatologist", "Homeopathy", "Orthopaedic", 
+        "Ayurveda", "Dentist", "Gynaecologist", "Ear, Nose, Throat", 
+        "Paediatrician", "Psychiatrist"
+    ]
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
@@ -78,6 +88,22 @@ async def chat(request: ChatRequest):
         
         # Handle search intent
         if intent_type == "search":
+            # Detect consultation mode (video or in-clinic) from user message
+            lower_msg = request.message.lower()
+            if "video" in lower_msg:
+                consultation_mode = "video"
+            elif "clinic" in lower_msg or "in-clinic" in lower_msg:
+                consultation_mode = "clinic"
+            else:
+                consultation_mode = None
+
+            # Apply simple filter placeholder (could be extended with real data)
+            if consultation_mode:
+                # For demonstration, we just note the mode in the response message
+                mode_note = f" (Preferred mode: {consultation_mode})"
+            else:
+                mode_note = ""
+
             query = intent_data.get("query", request.message)
             filters_obj = intent_data.get("filters", {})
             filters = {}
@@ -85,30 +111,29 @@ async def chat(request: ChatRequest):
                 filters["max_fees"] = filters_obj["max_fees"]
             if filters_obj.get("min_rating"):
                 filters["min_rating"] = filters_obj["min_rating"]
-            
+
             results = agent.find_doctors(query, lat, lng, filters=filters)
-            
+
             if not results:
                 return ChatResponse(
                     type="search",
-                    message=f"I couldn't find any doctors matching '{query}'. Try a different specialty?"
+                    message=f"I couldn't find any doctors matching '{query}'. Try a different specialty?",
                 )
-            
+
+            # Optionally filter by consultation mode if data supports it (placeholder)
+            if consultation_mode:
+                # Assuming each doctor dict may have a 'consultation_modes' list
+                filtered = [doc for doc in results if consultation_mode in doc.get('consultation_modes', [])]
+                if filtered:
+                    results = filtered
+
             top_result = results[0]
             count = len(results)
-            
+
             message = f"I found {count} doctors. The best match is {top_result['name']} ({top_result['specialty']}).\n"
             message += f"They are {top_result['distance']} away and rated {top_result['rating']} stars.\n\n"
-            message += "Here are the top options:"
-            
-            return ChatResponse(
-                type="search",
-                message=message,
-                data={
-                    "doctors": results[:5],  # Return top 5
-                    "count": count
-                }
-            )
+            message += "Here are the top options:" + mode_note
+
         
         # Handle filter intent
         if intent_type == "filter":

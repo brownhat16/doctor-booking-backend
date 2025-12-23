@@ -57,7 +57,8 @@ class MockDatabase:
                 ),
                 rating=rating,
                 reviews_count=random.randint(50, 500),
-                availability=self._generate_availability()
+                availability=self._generate_availability(),
+                consultation_modes=random.choice([["clinic"], ["video", "clinic"], ["video", "clinic"]]) # High chance of both
             )
             self.doctors[doc_id] = doctor
 

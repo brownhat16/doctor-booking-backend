@@ -47,6 +47,7 @@ class DoctorBookingAgent:
                 "next_available": "Today" if res["available_today"] else "Tomorrow",
                 "rating": doc.rating,
                 "fees": doc.fees.in_clinic,
+                "consultation_modes": doc.consultation_modes,
                 "match_reason": f"Rated {doc.rating} stars and close to you."
             })
             
