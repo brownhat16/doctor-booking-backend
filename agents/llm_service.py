@@ -89,6 +89,12 @@ SYMPTOM → SPECIALIST MAPPING:
 - Heart / Chest pain → "Cardiologist"
 - Child-related issues → "Pediatrician"
 - Teeth / Dental pain → "Dentist"
+- Bone / Joint / Orthopedic → "Orthopedist"
+- Mental health / Depression / Anxiety → "Psychiatrist"
+- Women's health / Pregnancy → "Gynaecologist"
+- Ear / Nose / Throat issues → "Ear, Nose, Throat"
+- Ayurveda / Natural → "Ayurveda"
+- Homeopathy → "Homeopathy"
 - Multiple or unclear symptoms → type="chat"
 
 PRONOUN RESOLUTION:
