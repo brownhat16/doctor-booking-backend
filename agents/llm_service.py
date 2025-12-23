@@ -51,6 +51,7 @@ INTENT TYPES:
    - **ONLY when doctors already shown in conversation**
    - User refines/narrows EXISTING results
    - Examples: "available after 5 pm", "under ₹500", "4 stars and above", "closer to me"
+   - **EXCLUDE: Consultation mode questions like "are they available for video?" → Use "chat" instead**
    - NO new specialty mentioned
    - NEVER use filter if no doctors in history
 
@@ -171,6 +172,12 @@ Output: {"type": "chat", "query": null, "response": "Great! What kind of doctor 
 
 User: (no doctors shown) "I prefer in-clinic visit"
 Output: {"type": "chat", "query": null, "response": "Understood! Which specialty doctor would you like to see?", ...}
+
+User: (after doctors shown) "are they available in-clinic?"
+Output: {"type": "chat", "query": null, "response": "Yes, all the doctors shown support in-clinic consultations. You can see their availability by clicking 'View Slots'. Would you like me to show you slots for a specific doctor?", ...}
+
+User: (after doctors shown) "can I do video consultation with them?"
+Output: {"type": "chat", "query": null, "response": "Most of these doctors support video consultations. To check a specific doctor's consultation modes and availability, click 'View Slots' on their card.", ...}
 
 User: "What are the slots for Dr. Patel?"
 Output: {"type": "slots", "query": "Dr. Patel", ...}
