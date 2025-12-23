@@ -137,6 +137,14 @@ async def chat(request: ChatRequest):
             message += f"They are {top_result['distance']} away and rated {top_result['rating']} stars.\n\n"
             message += "Here are the top options:" + mode_note
 
+            return ChatResponse(
+                type="search",
+                message=message,
+                data={
+                    "doctors": results[:5],  # Return top 5
+                    "count": count
+                }
+            )
         
         # Handle filter intent
         if intent_type == "filter":
