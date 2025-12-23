@@ -230,7 +230,8 @@ async def chat(request: ChatRequest):
                 # Context-aware instruction based on consultation type
                 if is_video:
                     message += "\n📹 **Video Consultation**\n"
-                    message += "Please join the video call 5 mins early. You'll receive a link via email."
+                    message += "The video call link will be sent to you via SMS and email immediately after booking.\n"
+                    message += "Please join the call 5 mins early."
                 else:
                     # Get doctor location for maps link
                     doctor_obj = agent.db.get_doctor(doc_id)
