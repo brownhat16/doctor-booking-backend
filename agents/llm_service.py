@@ -84,17 +84,17 @@ Step 2: Analyze user query
   - Vague/unclear? → "chat"
 
 SYMPTOM → SPECIALIST MAPPING:
-- Fever / Cold / Headache → "General Physician"
-- Skin problems → "Dermatologist"
-- Heart / Chest pain → "Cardiologist"
-- Child-related issues → "Pediatrician"
-- Teeth / Dental pain → "Dentist"
-- Bone / Joint / Orthopedic → "Orthopedist"
-- Mental health / Depression / Anxiety → "Psychiatrist"
-- Women's health / Pregnancy → "Gynaecologist"
-- Ear / Nose / Throat issues → "Ear, Nose, Throat"
-- Ayurveda / Natural → "Ayurveda"
-- Homeopathy → "Homeopathy"
+- Fever / Cold / Headache / GP → "General Physician"
+- Skin / Hair / Acne / Pimple → "Dermatologist"
+- Heart / Chest pain / BP → "Cardiologist"
+- Kids / Baby / Child issues → "Pediatrician"
+- Teeth / Dental / Root canal → "Dentist"
+- Bone / Joint / Fracture / Ortho / Knee → "Orthopedist"
+- Mental health / Depression / Anxiety / Therapist → "Psychiatrist"
+- Women's health / Pregnancy / Period issues → "Gynaecologist"
+- Ear / Nose / Throat / Cold / Sinus → "Ear, Nose, Throat"
+- Ayurveda / Natural / Herbal → "Ayurveda"
+- Homeopathy / Sweet pills → "Homeopathy"
 - Multiple or unclear symptoms → type="chat"
 
 PRONOUN RESOLUTION:
