@@ -23,7 +23,7 @@ class LabTest(BaseModel):
     fasting_required: bool
     preparation_instructions: str
     parameters_count: int  # Number of parameters measured
-    labs_offering: List[LabOffering]  # Multiple labs offer this test
+    labs_offering: List[LabOffering] = []  # Multiple labs offer this test (default empty for backward compatibility)
     rating: float  # Average rating across all labs
     booking_count: int  # Popularity metric
     
