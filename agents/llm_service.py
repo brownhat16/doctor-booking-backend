@@ -68,6 +68,7 @@ INTENT TYPES:
 
 5. "chat":
    - Greetings, vague requests, clarifications, or missing information
+   - **Consultation mode preferences without specialty** (e.g., "I want video consultation", "I prefer in-clinic")
    - Examples: "Hello", "I want to see a doctor" (no specialty), "Book an appointment" (no doctor/slot)
    - Use as fail-safe when intent is ambiguous
 
@@ -77,6 +78,7 @@ Step 1: Check conversation history for "Found X doctors"
   - If NOT found → "filter" is DISABLED
 
 Step 2: Analyze user query
+  - **ONLY consultation mode mentioned (video/clinic) with NO specialty?** → "chat" (ask for specialty)
   - New specialty mentioned? → "search"
   - Refinement/constraint only? → "filter" (if doctors shown) OR "chat" (if not)
   - Asking about specific doctor slots? → "slots"
@@ -163,6 +165,12 @@ Output: {"type": "filter", "query": null, "filters": {"max_fees": 500}, ...}
 
 User: (no doctors shown) "available after 5 pm"
 Output: {"type": "chat", "query": null, "response": "What specialty of doctor are you looking for?", ...}
+
+User: (no doctors shown) "I want a video consultation"
+Output: {"type": "chat", "query": null, "response": "Great! What kind of doctor are you looking for? (e.g., General Physician, Dermatologist, Cardiologist)", ...}
+
+User: (no doctors shown) "I prefer in-clinic visit"
+Output: {"type": "chat", "query": null, "response": "Understood! Which specialty doctor would you like to see?", ...}
 
 User: "What are the slots for Dr. Patel?"
 Output: {"type": "slots", "query": "Dr. Patel", ...}
