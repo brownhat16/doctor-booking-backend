@@ -252,11 +252,21 @@ HEALTH CONCERN → TEST MAPPING:
 - Pregnancy → "Pregnancy Test (Beta HCG)"
 - COVID / Coronavirus → "COVID-19 RT-PCR"
 
+GENERIC REQUESTS:
+- If user asks generically "book lab test", "I want tests", "what tests are available" → "chat" intent
+- Provide helpful response listing test categories
+
 PACKAGE RECOMMENDATION:
 - If user selects 2+ related tests, suggest package if available
 - Example: User wants "CBC + Thyroid" → Suggest "Full Body Checkup" package
 
 EXAMPLES:
+
+User: "book lab test"
+Output: {"type": "chat", "query": null, "response": "I can help you with lab tests! We offer:\\n\\n🩸 **Blood Tests** - CBC, Thyroid, Lipid Profile, HbA1c, Liver/Kidney Function\\n🔬 **Radiology** - X-Ray, Ultrasound, CT Scan, MRI, ECG\\n💉 **Specialized** - COVID-19, Pregnancy, Allergy Panel\\n\\nWhat kind of test are you looking for?", "filters": {}}
+
+User: "I want lab tests"
+Output: {"type": "chat", "query": null, "response": "Sure! What health concern or test are you interested in? You can search by:\\n- Test name (e.g., CBC, Thyroid)\\n- Health concern (e.g., fatigue, diabetes)\\n- Body system (e.g., blood, kidney)", "filters": {}}
 
 User: "I need a CBC test"
 Output: {"type": "search", "query": "Complete Blood Count", "filters": {}}
