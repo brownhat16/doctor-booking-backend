@@ -229,9 +229,27 @@ async def chat(request: ChatRequest):
                 
                 # Context-aware instruction based on consultation type
                 if is_video:
+                    message += "\n📹 **Video Consultation**\n"
                     message += "Please join the video call 5 mins early. You'll receive a link via email."
                 else:
-                    message += "Please arrive 15 mins early."
+                    # Get doctor location for maps link
+                    doctor_obj = agent.db.get_doctor(doc_id)
+                    if doctor_obj:
+                        lat = doctor_obj.location.coordinates.lat
+                        lng = doctor_obj.location.coordinates.lng
+                        clinic_name = doctor_obj.location.clinic_name
+                        address = doctor_obj.location.address
+                        
+                        # Generate Google Maps link
+                        maps_link = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}"
+                        
+                        message += "\n🏥 **In-Clinic Consultation**\n"
+                        message += f"📍 {clinic_name}\n"
+                        message += f"{address}\n\n"
+                        message += f"🗺️ Get Directions: {maps_link}\n\n"
+                        message += "Please arrive 15 mins early."
+                    else:
+                        message += "Please arrive 15 mins early."
             else:
                 message = f"❌ Booking failed: {result['message']}"
             
