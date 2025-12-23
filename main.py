@@ -4,9 +4,10 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
 from agents.doctor_booking.agent import DoctorBookingAgent
+from agents.lab_test.agent import LabTestAgent
 from agents.llm_service import LLMService
 
-app = FastAPI(title="Doctor Booking API", version="1.0.0")
+app = FastAPI(title="Healthcare Booking API", version="2.0.0")
 
 # CORS middleware to allow Next.js frontend to call this API
 app.add_middleware(
@@ -23,7 +24,8 @@ if not api_key:
     raise ValueError("NVIDIA_API_KEY environment variable is required")
 
 llm = LLMService(api_key=api_key)
-agent = DoctorBookingAgent()
+doctor_agent = DoctorBookingAgent()
+lab_agent = LabTestAgent()
 
 # Request/Response models
 class Message(BaseModel):
@@ -66,12 +68,36 @@ async def get_specialties():
 async def chat(request: ChatRequest):
     """
     Main chat endpoint that handles all user messages.
-    Supports search, filter, slots, booking, and chat intents.
+    Supports both doctor and lab test queries.
     """
     try:
         # Convert history to format expected by LLM
         history_tuples = [(msg.role.capitalize(), msg.content) for msg in request.history]
         
+        # Detect query type (doctor vs lab test)
+        lower_msg = request.message.lower()
+        lab_keywords = ["test", "lab", "blood", "cbc", "thyroid", "diabetes", "hba1c", 
+                       "lipid", "liver", "kidney", "vitamin", "x-ray", "ultrasound", 
+                       "ct scan", "mri", "ecg", "covid", "pregnancy"]
+        
+        is_lab_query = any(keyword in lower_msg for keyword in lab_keywords)
+        
+        # Route to appropriate agent
+        if is_lab_query:
+            # Handle lab test queries
+            return await handle_lab_test_query(request, history_tuples)
+        else:
+            # Handle doctor queries (existing logic)
+            return await handle_doctor_query(request, history_tuples)
+    except Exception as e:
+        print(f"Error in chat endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def handle_doctor_query(request: ChatRequest, history_tuples: list):
+    """Handle doctor booking queries"""
+    try:
         # Parse intent with LLM
         intent_data = llm.parse_doctor_search_intent(request.message, history_tuples)
         
@@ -115,7 +141,7 @@ async def chat(request: ChatRequest):
             if filters_obj.get("min_rating"):
                 filters["min_rating"] = filters_obj["min_rating"]
 
-            results = agent.find_doctors(query, lat, lng, filters=filters)
+            results = doctor_agent.find_doctors(query, lat, lng, filters=filters)
 
             if not results:
                 return ChatResponse(
@@ -169,7 +195,7 @@ async def chat(request: ChatRequest):
                 )
             
             # Perform search with filters
-            results = agent.find_doctors(query, lat, lng, filters=filters)
+            results = doctor_agent.find_doctors(query, lat, lng, filters=filters)
             
             if not results:
                 return ChatResponse(
@@ -211,7 +237,7 @@ async def chat(request: ChatRequest):
                 )
             
             # Find doctor by name
-            candidates = agent.find_doctors(doctor_name, lat, lng)
+            candidates = doctor_agent.find_doctors(doctor_name, lat, lng)
             if not candidates:
                 return ChatResponse(
                     type="chat",
@@ -219,7 +245,7 @@ async def chat(request: ChatRequest):
                 )
             
             doc_id = candidates[0]['id']
-            schedule = agent.get_doctor_schedule(doc_id)
+            schedule = doctor_agent.get_doctor_schedule(doc_id)
             
             if not schedule.get("schedule"):
                 return ChatResponse(
@@ -243,7 +269,7 @@ async def chat(request: ChatRequest):
                 )
             
             # Find doctor
-            candidates = agent.find_doctors(doctor_name, lat, lng)
+            candidates = doctor_agent.find_doctors(doctor_name, lat, lng)
             if not candidates:
                 return ChatResponse(
                     type="chat",
@@ -251,7 +277,7 @@ async def chat(request: ChatRequest):
                 )
             
             doc_id = candidates[0]['id']
-            schedule = agent.get_doctor_schedule(doc_id)
+            schedule = doctor_agent.get_doctor_schedule(doc_id)
             
             if not schedule.get("schedule"):
                 return ChatResponse(
@@ -263,7 +289,7 @@ async def chat(request: ChatRequest):
             first_slot = schedule['schedule'][0]['slots'][0]
             date_str = schedule['schedule'][0]['date']
             
-            result = agent.book_appointment(doc_id, date_str, first_slot['id'], "web_user")
+            result = doctor_agent.book_appointment(doc_id, date_str, first_slot['id'], "web_user")
             
             if result['status'] == 'success':
                 # Detect consultation mode from the original request
@@ -280,7 +306,7 @@ async def chat(request: ChatRequest):
                     message += "Please join the call 5 mins early."
                 else:
                     # Get doctor location for maps link
-                    doctor_obj = agent.db.get_doctor(doc_id)
+                    doctor_obj = doctor_agent.db.get_doctor(doc_id)
                     if doctor_obj:
                         lat = doctor_obj.location.coordinates.lat
                         lng = doctor_obj.location.coordinates.lng
@@ -315,7 +341,99 @@ async def chat(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+async def handle_lab_test_query(request: ChatRequest, history_tuples: list):
+    """Handle lab test booking queries"""
+    # Parse intent with LLM (using GPT-OSS-120B)
+    intent_data = llm.parse_lab_test_intent(request.message, history_tuples)
+    
+    intent_type = intent_data.get("type", "").lower().strip()
+    print(f"DEBUG LAB: Parsed Intent Type: '{intent_type}'")
+    print(f"DEBUG LAB: Full Intent Data: {intent_data}")
+    
+    # Handle chat intent
+    if intent_type == "chat":
+        return ChatResponse(
+            type="chat",
+            message=intent_data.get("response", "How can I help you with lab tests?")
+        )
+    
+    # Handle search intent
+    if intent_type == "search":
+        query = intent_data.get("query", request.message)
+        filters_obj = intent_data.get("filters", {})
+        filters = {}
+        if filters_obj.get("max_price"):
+            filters["max_price"] = filters_obj["max_price"]
+        if filters_obj.get("home_collection") is not None:
+            filters["home_collection"] = filters_obj["home_collection"]
+        if filters_obj.get("min_rating"):
+            filters["min_rating"] = filters_obj["min_rating"]
+        
+        results = lab_agent.search_tests(query, filters=filters)
+        
+        if not results:
+            return ChatResponse(
+                type="search",
+                message=f"I couldn't find any tests matching '{query}'. Try a different search?"
+            )
+        
+        count = len(results)
+        top_test = results[0]
+        
+        message = f"Found {count} lab tests.\n\n"
+        message += f"Top match: {top_test['name']} - ₹{top_test['price']}"
+        if top_test['home_collection_available']:
+            message += f" (+₹{top_test['home_collection_fee']} home collection)"
+        
+        # Check for package recommendations
+        test_ids = [t['id'] for t in results[:3]]
+        package = lab_agent.recommend_package(test_ids)
+        if package:
+            message += f"\n\n💡 **Package Recommendation**: {package['name']}"
+            message += f"\nSave ₹{package['savings']} ({package['savings_percentage']}% off)"
+        
+        return ChatResponse(
+            type="search",
+            message=message,
+            data={"tests": results[:10], "count": count, "package": package}
+        )
+    
+    # Handle filter intent
+    if intent_type == "filter":
+        filters_obj = intent_data.get("filters", {})
+        filters = {}
+        if filters_obj.get("max_price"):
+            filters["max_price"] = filters_obj["max_price"]
+        if filters_obj.get("home_collection") is not None:
+            filters["home_collection"] = filters_obj["home_collection"]
+        
+        # Re-search with filters (simplified - would use context in production)
+        query = intent_data.get("query", "blood")
+        results = lab_agent.search_tests(query, filters=filters)
+        
+        if not results:
+            return ChatResponse(
+                type="search",
+                message="No tests match your filters. Try adjusting them?"
+            )
+        
+        count = len(results)
+        message = f"Found {count} tests matching your criteria."
+        
+        return ChatResponse(
+            type="search",
+            message=message,
+            data={"tests": results[:10], "count": count}
+        )
+    
+    # Fallback
+    return ChatResponse(
+        type="chat",
+        message="I can help you search for lab tests. Try asking about specific tests like CBC, Thyroid, or HbA1c!"
+    )
+
 if __name__ == "__main__":
+
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

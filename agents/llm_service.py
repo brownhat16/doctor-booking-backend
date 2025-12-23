@@ -8,7 +8,8 @@ class LLMService:
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=api_key
         )
-        self.model = "deepseek-ai/deepseek-v3.1"
+        self.doctor_model = "deepseek-ai/deepseek-v3.1"
+        self.lab_model = "openai/gpt-oss-120b"
 
     def parse_doctor_search_intent(self, user_query: str, history: list = None) -> Dict[str, Any]:
         """
@@ -29,14 +30,21 @@ CRITICAL RULES:
 - If required information is missing, downgrade intent to "chat" and ask a clarification question.
 - Return STRICTLY valid JSON. No markdown. No explanations. No comments.
 
-CONVERSATION STATE AWARENESS:
-The system tracks whether doctors have been shown to the user.
-You MUST detect this from conversation history by looking for phrases like:
-- "Found X doctors"
-- "Here are the top options"
-- "I found"
+OUTPUT STRUCTURE:
+{
+  "type": "search | filter | slots | booking | chat",
+  "query": "specialty name or null",
+  "filters": {
+    "max_fees": <number or null>,
+    "min_rating": <number or null>,
+    "availability_time": <string or null>,
+    "distance_km": <number or null>
+  },
+  "slot_id": "<slot identifier or null>",
+  "response": "<Only for type='chat', your reply to the user>"
+}
 
-If doctors have been shown → "filter" intent becomes available.
+CONVERSATION CONTEXT:
 If NO doctors shown yet → "filter" is DISABLED (use "search" or "chat" instead).
 
 INTENT TYPES:
@@ -87,6 +95,7 @@ Step 2: Analyze user query
   - Committing to book with time? → "booking"
   - Vague/unclear? → "chat"
 
+
 SYMPTOM → SPECIALIST MAPPING:
 - Fever / Cold / Headache / GP → "General Physician"
 - Skin / Hair / Acne / Pimple → "Dermatologist"
@@ -102,53 +111,10 @@ SYMPTOM → SPECIALIST MAPPING:
 - Multiple or unclear symptoms → type="chat"
 
 PRONOUN RESOLUTION:
-- If user says "him", "her", "that doctor":
-  - Resolve ONLY if a doctor name explicitly appeared in conversation history
-  - If no doctor exists → type="chat", ask "Which doctor?"
-- NEVER guess or fabricate doctor names
-
-OUTPUT JSON SCHEMA:
-{
-  "type": "search | filter | slots | booking | chat",
-  "query": "string or null",
-  "filters": {
-    "max_fees": "int or null",
-    "min_rating": "float or null",
-    "availability_time": "string or null",
-    "max_distance_km": "float or null"
-  },
-  "slot_id": "string or null",
-  "response": "string or null"
-}
-
-FIELD-SPECIFIC RULES:
-
-- type: MUST be one of: search, filter, slots, booking, chat
-
-- query:
-  - search → specialty or symptoms
-  - filter → null (constraints go in filters object)
-  - slots → doctor name
-  - booking → doctor name
-  - chat → null
-
-- filters:
-  - Populate ONLY when explicitly mentioned
-  - Used for both "search" (initial constraints) and "filter" (refinements)
-  - max_fees: exact number only (e.g., 500, 1000)
-  - min_rating: float (e.g., 4.0, 4.5)
-  - availability_time: preserve exact user phrase (e.g., "5pm", "evening", "morning")
-  - max_distance_km: number (e.g., 5, 10)
-
-- slot_id:
-  - ONLY populate if explicitly mentioned
-  - Examples: "5:30pm", "morning slot", "first available"
-  - NEVER infer from vague phrases
-
-- response:
-  - ONLY for type="chat"
-  - MUST be null for search, filter, slots, booking
-  - Should ask clarification questions when needed
+- Scan history for last mentioned doctor name
+- Replace "him", "her", "them", "this doctor", "that one" with actual name
+- If multiple doctors, choose the most recently mentioned
+- If ambiguous, ask: "Which doctor are you referring to?"
 
 FAIL-SAFE RULE:
 If intent is ambiguous, required data is missing, or you're unsure:
@@ -200,24 +166,145 @@ Output: {"type": "booking", "query": "Dr. Patel", "slot_id": "5:30pm", ...}
 
         try:
             completion = self.client.chat.completions.create(
-                model=self.model,
+                model=self.doctor_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.2,
                 top_p=0.7,
-                max_tokens=1024,
-                stream=False
+                max_tokens=512
             )
-            
-            content = completion.choices[0].message.content
-            print(f"DEBUG: Raw LLM Response: {content}") # Debugging
-            
-            # Clean up potential markdown code blocks if the model adds them (DeepSeek might)
-            text = content.replace("```json", "").replace("```", "").strip()
+            text = completion.choices[0].message.content.strip()
+            # Remove markdown code fences if present
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1]
+                text = text.rsplit("\n```", 1)[0]
             return json.loads(text)
         except Exception as e:
             print(f"LLM Parsing Error: {e}")
             # Fallback
             return {"type": "search", "query": user_query, "max_fees": None, "availability": None}
+
+    def parse_lab_test_intent(self, user_query: str, history: list = None) -> Dict[str, Any]:
+        """
+        Uses GPT-OSS-120B (via NVIDIA) to parse lab test queries.
+        """
+        history_text = "\n".join([f"{role}: {msg}" for role, msg in (history or [])])
+        
+        system_prompt = """
+You are an AI assistant for lab test booking. Parse user requests and extract structured intent.
+
+SYSTEM ROLE:
+You help users search for lab tests, understand test details, and book tests (single or multiple).
+You DO NOT invent test names, prices, or availability.
+
+CRITICAL RULES:
+- Return STRICTLY valid JSON. No markdown. No explanations.
+- If information is missing, downgrade to "chat" and ask clarifying questions.
+
+OUTPUT STRUCTURE:
+{
+  "type": "search | filter | cart | booking | chat",
+  "query": "test name/category or health concern",
+  "filters": {
+    "max_price": <number or null>,
+    "home_collection": <boolean or null>,
+    "min_rating": <number or null>
+  },
+  "test_ids": ["test_001", "test_002"],  // For cart/booking
+  "collection_type": "home | lab",
+  "slot_id": "slot_xxx",
+  "response": "<Only for type='chat'>"
+}
+
+INTENT TYPES:
+
+1. "search":
+   - User looking for tests by name, category, or health concern
+   - Examples: "CBC test", "diabetes tests", "I have fatigue", "thyroid profile"
+
+2. "filter":
+   - Refining existing test results
+   - Examples: "under 1000 rupees", "home collection available", "same day results"
+
+3. "cart":
+   - Adding tests to cart for multi-test booking
+   - Examples: "add CBC", "I want thyroid test too"
+
+4. "booking":
+   - Confirming booking with collection details
+   - Requires: test_ids, collection_type, slot_id
+
+5. "chat":
+   - Greetings, clarifications, package recommendations
+   - Examples: "Hello", "what's included in CBC?", "tell me about vitamin D test"
+
+HEALTH CONCERN → TEST MAPPING:
+- Fatigue / Tiredness / Low energy → "Thyroid Profile, CBC, Vitamin D"
+- Diabetes / Blood sugar / High glucose → "HbA1c, Fasting Blood Sugar"
+- Cholesterol / Heart / Cardiac → "Lipid Profile"
+- Liver / Jaundice / Hepatitis → "Liver Function Test (LFT)"
+- Kidney / Renal / Creatinine → "Kidney Function Test (KFT)"
+- Anemia / Weakness → "CBC, Iron Studies"
+- Fever / Infection → "CBC, ESR, CRP"
+- Allergy / Itching → "Allergy Panel"
+- Pregnancy → "Pregnancy Test (Beta HCG)"
+- COVID / Coronavirus → "COVID-19 RT-PCR"
+
+PACKAGE RECOMMENDATION:
+- If user selects 2+ related tests, suggest package if available
+- Example: User wants "CBC + Thyroid" → Suggest "Full Body Checkup" package
+
+EXAMPLES:
+
+User: "I need a CBC test"
+Output: {"type": "search", "query": "Complete Blood Count", "filters": {}}
+
+User: "tests for diabetes"
+Output: {"type": "search", "query": "HbA1c", "filters": {}}
+
+User: "I feel very tired"
+Output: {"type": "search", "query": "Thyroid Profile", "filters": {}}
+
+User: (after tests shown) "under 1000 rupees"
+Output: {"type": "filter", "filters": {"max_price": 1000}}
+
+User: (after tests shown) "home collection available?"
+Output: {"type": "filter", "filters": {"home_collection": true}}
+
+User: "add CBC to cart"
+Output: {"type": "cart", "test_ids": ["test_blood_001"]}
+
+User: "book for home collection tomorrow morning"
+Output: {"type": "booking", "collection_type": "home", ...}
+"""
+        
+        user_prompt = f"""
+        Conversation History:
+        {history_text}
+        
+        Current User Query: "{user_query}"
+        
+        JSON Output:
+        """
+
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.lab_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2,
+                top_p=0.7,
+                max_tokens=256
+            )
+            text = completion.choices[0].message.content.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1]
+                text = text.rsplit("\n```", 1)[0]
+            return json.loads(text)
+        except Exception as e:
+            print(f"LLM Lab Test Parsing Error: {e}")
+            return {"type": "search", "query": user_query, "filters": {}}
