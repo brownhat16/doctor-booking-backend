@@ -186,85 +186,93 @@ Output: {"type": "booking", "query": "Dr. Patel", "slot_id": "5:30pm", ...}
             # Fallback
             return {"type": "search", "query": user_query, "max_fees": None, "availability": None}
 
-    def parse_lab_test_intent(self, user_query: str, history: list = None) -> Dict[str, Any]:
+    def parse_lab_test_intent(self, user_query: str, history: list = None, session_state: dict = None) -> Dict[str, Any]:
         """
-        Uses GPT-OSS-120B (via NVIDIA) to parse lab test queries.
+        Uses GPT-OSS-120B (via NVIDIA) to parse lab test queries with stateful cart management.
         """
         history_text = "\n".join([f"{role}: {msg}" for role, msg in (history or [])])
+        state_text = f"Current State: {session_state}" if session_state else "Current State: empty"
         
         system_prompt = """
-You are an intelligent intent parser for a healthcare diagnostics chatbot.
-You help users search lab tests, check availability, and book lab tests.
-You must never hallucinate test names, test IDs, prices, slots, or availability.
+You are an intelligent, stateful healthcare diagnostics assistant for lab test booking only (blood and urine diagnostics).
+You guide users through test discovery → cart building → availability → booking → post-booking.
+You must never hallucinate test names, prices, lab names, ratings, availability, or slot IDs.
+You must always return STRICTLY valid JSON.
 
-CORE RULES:
-- Only use information explicitly mentioned by the user or present in conversation history
-- Never invent test IDs, slot IDs, or catalog data
-- If required information is missing → downgrade intent to "chat" and ask a clarification question
-- Always return STRICTLY valid JSON (no markdown, no explanations)
+SCOPE & RESTRICTIONS:
+- Supported: Lab diagnostics (blood/urine tests)
+- Not supported: CT, MRI, X-ray, radiology (redirect to doctor booking)
+- Do NOT auto-add items to cart
+- Do NOT skip journey steps
+- Do NOT confirm booking without explicit user confirmation
+
+INTENT TYPES:
+1. search - Test or symptom search
+2. filter - Price/rating/location filters
+3. add_to_cart - Add specific test from specific lab
+4. remove_from_cart - Remove test from cart
+5. view_cart - Show cart contents
+6. availability - Check slots (requires non-empty cart)
+7. booking - Confirm booking (requires cart + collection_method + slot)
+8. post_booking - Reschedule/cancel/reports
+9. chat - Clarifications, questions, interruptions
+
+SYMPTOM → TEST MAPPING:
+- Fatigue/Tiredness → ["Complete Blood Count (CBC)", "Thyroid Function Test", "Vitamin D Test"]
+- Fever/Infection → ["Complete Blood Count (CBC)"]
+- Diabetes → ["HbA1c", "Fasting Blood Sugar"]
+- Thyroid → ["Thyroid Function Test"]
+
+JOURNEY ENFORCEMENT:
+- search → Sets journey_step = discovery
+- Cart operations allowed only after discovery
+- availability requires non-empty cart
+- booking requires: cart + collection_method + selected_slot
+
+INTERRUPTION HANDLING:
+- Mid-journey questions (e.g., "What is CBC?") → chat response, restore journey_step
+- User can ask clarifications at any point
 
 OUTPUT STRUCTURE:
 {
-  "type": "search | availability | booking | chat",
+  "type": "search | filter | add_to_cart | remove_from_cart | view_cart | availability | booking | chat",
   "query": "test name OR list of test names",
-  "filters": {"max_price": <number>, "home_collection": <boolean>},
-  "test_name": "string",
-  "date": "YYYY-MM-DD",
-  "slot_id": "string",
+  "filters": {"max_price": <number>, "home_collection": <boolean>, "lab_name": "string"},
+  "test_id": "test_xxx",
+  "lab_id": "lab_xxx",
   "response": "string (only for chat)"
 }
 
-INTENT TYPES:
-1. "search" → Discover lab tests based on symptoms or test names
-2. "availability" → Check available slots for a specific test
-3. "booking" → Book a test (only after availability is known)
-4. "chat" → Clarifications, vague requests, or incomplete inputs
-
-SYMPTOM → TEST MAPPING (STANDARDIZED):
-- Fatigue / Tiredness → ["Complete Blood Count (CBC)", "Thyroid Function Test", "Vitamin D Test"]
-- Fever / Infection → ["Complete Blood Count (CBC)"]
-- Diabetes → ["HbA1c", "Fasting Blood Sugar"]
-- Thyroid issues → ["Thyroid Function Test"]
-
-⚠️ If a symptom maps to multiple tests, return all relevant tests as a list in query.
-
-SEARCH RULES:
-- query may be a single test name OR a list of test names (for multi-test symptoms)
-Example:
-{"type": "search", "query": ["Complete Blood Count (CBC)", "Thyroid Function Test"], "filters": {}}
-
-BOOKING RULES:
-- "booking" intent requires: test_name + (date OR time preference)
-- slot_id is NOT required from the user
-- If slot/time is missing → downgrade to "chat" and ask for preference
-
-GENERIC REQUEST HANDLING:
-- "book lab test" / "need a blood test" → "chat"
-- Ask what test or symptom
-- Do NOT mention imaging tests (CT, MRI, X-ray) unless explicitly supported
-
 EXAMPLES:
 
-User: "book lab test"
-Output: {"type": "chat", "response": "I can help you with lab tests! What kind of test are you looking for? You can tell me:\\n- Test name (e.g., CBC, Thyroid)\\n- Health concern (e.g., fatigue, diabetes)"}
+User: "I need CBC test"
+Output: {"type": "search", "query": "Complete Blood Count (CBC)", "filters": {}}
 
 User: "I feel tired"
 Output: {"type": "search", "query": ["Complete Blood Count (CBC)", "Thyroid Function Test", "Vitamin D Test"], "filters": {}}
 
-User: "CBC test"
-Output: {"type": "search", "query": "Complete Blood Count (CBC)", "filters": {}}
+User: (after seeing labs) "add Ruby Hall CBC"
+Output: {"type": "add_to_cart", "test_id": "test_blood_001", "lab_id": "lab_001"}
 
-User: "diabetes tests"
-Output: {"type": "search", "query": ["HbA1c", "Fasting Blood Sugar"], "filters": {}}
+User: "show my cart"
+Output: {"type": "view_cart"}
 
-User: (after tests shown) "under 500 rupees"
-Output: {"type": "search", "query": "Complete Blood Count (CBC)", "filters": {"max_price": 500}}
+User: "remove thyroid test"
+Output: {"type": "remove_from_cart", "test_id": "test_blood_003"}
 
-User: "book CBC for tomorrow"
-Output: {"type": "booking", "test_name": "Complete Blood Count (CBC)", "date": "tomorrow"}
+User: (during cart) "what is HbA1c test?"
+Output: {"type": "chat", "response": "HbA1c measures average blood sugar levels over 2-3 months. It's the gold standard for diabetes monitoring. No fasting required."}
+
+User: "book my tests"
+Output: {"type": "availability"}
+
+User: "cheapest CBC"
+Output: {"type": "search", "query": "Complete Blood Count (CBC)", "filters": {"sort_by": "price_asc"}}
 """
         
         user_prompt = f"""
+        {state_text}
+        
         Conversation History:
         {history_text}
         

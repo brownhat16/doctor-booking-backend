@@ -1,6 +1,6 @@
 import random
 from typing import List, Dict, Optional
-from .models import LabTest, LabPackage, LabSlot
+from .models import LabTest, LabPackage, LabSlot, LabOffering
 from datetime import date, timedelta
 
 class LabTestDatabase:
@@ -12,37 +12,79 @@ class LabTestDatabase:
     def _seed_data(self):
         """Generate mock lab tests and packages"""
         
-        # Blood Tests
-        blood_tests = [
-            ("CBC", "Complete Blood Count", ["Hemoglobin", "WBC", "Platelets"], 25, 500, True, False, "No special preparation"),
-            ("Lipid Profile", "Cholesterol & Triglycerides", ["Total Cholesterol", "HDL", "LDL", "Triglycerides"], 8, 800, True, True, "12-14 hours fasting required"),
-            ("Thyroid Profile", "TSH, T3, T4", ["TSH", "T3 Total", "T4 Total"], 3, 700, True, False, "Can be done anytime"),
-            ("HbA1c", "Diabetes Monitoring", ["Glycated Hemoglobin"], 1, 600, True, False, "No fasting needed"),
-            ("Liver Function Test (LFT)", "Liver Enzymes", ["SGOT", "SGPT", "Bilirubin", "Albumin"], 12, 900, True, True, "8-12 hours fasting"),
-            ("Kidney Function Test (KFT)", "Renal Profile", ["Creatinine", "BUN", "Uric Acid"], 8, 850, True, True, "8 hours fasting"),
-            ("Vitamin D", "Vitamin D (25-OH)", ["25-Hydroxyvitamin D"], 1, 1200, True, False, "No preparation needed"),
-            ("Vitamin B12", "B12 Levels", ["Cobalamin"], 1, 900, True, False, "No preparation"),
-            ("Iron Studies", "Serum Iron Profile", ["Serum Iron", "TIBC", "Ferritin"], 3, 1100, True, True, "Morning sample preferred"),
-            ("ESR", "Erythrocyte Sedimentation Rate", ["ESR"], 1, 200, True, False, "No preparation"),
-            ("CRP", "C-Reactive Protein", ["CRP"], 1, 500, True, False, "No preparation"),
-            ("Fasting Blood Sugar", "FBS", ["Glucose"], 1, 150, True, True, "8-12 hours fasting required"),
-            ("PPBS", "Post-Prandial Blood Sugar", ["Glucose"], 1, 150, False, False, "Test after 2 hours of meal"),
+        # Define lab centers with their characteristics
+        labs = [
+            {"id": "lab_001", "name": "Ruby Hall Clinic", "rating": 4.8, "location": "Pune Central", "accreditation": "NABL"},
+            {"id": "lab_002", "name": "CityCare Labs", "rating": 4.5, "location": "Koregaon Park", "accreditation": "NABL"},
+            {"id": "lab_003", "name": "Sahyadri Hospital", "rating": 4.7, "location": "Deccan", "accreditation": "NABL, CAP"},
+            {"id": "lab_004", "name": "Deenanath Labs", "rating": 4.6, "location": "Pimpri", "accreditation": "NABL"},
+            {"id": "lab_005", "name": "Apollo Diagnostics", "rating": 4.9, "location": "Shivajinagar", "accreditation": "NABL, CAP"},
         ]
         
-        for idx, (name, full_name, params, param_count, price, home, fasting, prep) in enumerate(blood_tests):
+        # Blood Tests - now with multiple lab offerings
+        blood_tests_data = [
+            ("CBC", "Complete Blood Count", 25, False, "No special preparation"),
+            ("Lipid Profile", "Cholesterol & Triglycerides", 8, True, "12-14 hours fasting required"),
+            ("Thyroid Profile", "TSH, T3, T4", 3, False, "Can be done anytime"),
+            ("HbA1c", "Diabetes Monitoring", 1, False, "No fasting needed"),
+            ("Liver Function Test (LFT)", "Liver Enzymes", 12, True, "8-12 hours fasting"),
+            ("Kidney Function Test (KFT)", "Renal Profile", 8, True, "8 hours fasting"),
+            ("Vitamin D", "Vitamin D (25-OH)", 1, False, "No preparation needed"),
+            ("Vitamin B12", "B12 Levels", 1, False, "No preparation"),
+            ("Iron Studies", "Serum Iron Profile", 3, True, "Morning sample preferred"),
+            ("ESR", "Erythrocyte Sedimentation Rate", 1, False, "No preparation"),
+            ("CRP", "C-Reactive Protein", 1, False, "No preparation"),
+            ("Fasting Blood Sugar", "FBS", 1, True, "8-12 hours fasting required"),
+        ]
+        
+        for idx, (short_name, full_name, param_count, fasting, prep) in enumerate(blood_tests_data):
+            # Create lab offerings for this test (3-5 labs per test)
+            import random
+            num_labs = random.randint(3, 5)
+            selected_labs = random.sample(labs, num_labs)
+            
+            lab_offerings = []
+            base_price = random.choice([400, 500, 600, 700, 800, 900, 1000, 1200])
+            
+            for lab in selected_labs:
+                # Vary price by ±20%
+                price_variation = random.uniform(0.8, 1.2)
+                lab_price = int(base_price * price_variation)
+                
+                # Vary TAT based on lab
+                tat_options = ["Same day", "24 hours", "48 hours"]
+                tat_weights = [0.2, 0.6, 0.2]  # 24h most common
+                tat = random.choices(tat_options, weights=tat_weights)[0]
+                
+                # Higher rated labs slightly more expensive and faster
+                if lab["rating"] >= 4.7:
+                    lab_price = int(lab_price * 1.1)
+                    tat = random.choice(["Same day", "24 hours"])
+                
+                offering = LabOffering(
+                    lab_id=lab["id"],
+                    lab_name=lab["name"],
+                    lab_rating=lab["rating"],
+                    lab_location=lab["location"],
+                    price=lab_price,
+                    home_collection_available=random.choice([True, True, True, False]),  # 75% yes
+                    home_collection_fee=50 if random.random() > 0.3 else 0,  # Sometimes free
+                    turnaround_time=tat,
+                    accreditation=lab["accreditation"]
+                )
+                lab_offerings.append(offering)
+            
+            # Create test with multiple lab offerings
             test = LabTest(
                 id=f"test_blood_{idx+1:03d}",
                 name=full_name,
                 category="Blood Tests",
-                price=price,
-                home_collection_available=home,
-                home_collection_fee=50 if home else 0,
                 sample_type="Blood",
                 fasting_required=fasting,
                 preparation_instructions=prep,
-                turnaround_time=random.choice(["24 hours", "Same day", "48 hours"]),
                 parameters_count=param_count,
-                rating=round(random.uniform(4.0, 4.9), 1),
+                labs_offering=lab_offerings,
+                rating=sum(lo.lab_rating for lo in lab_offerings) / len(lab_offerings),  # Average
                 booking_count=random.randint(100, 1000)
             )
             self.tests.append(test)

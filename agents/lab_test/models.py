@@ -2,20 +2,29 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, date
 
+class LabOffering(BaseModel):
+    """Lab center offering a specific test"""
+    lab_id: str
+    lab_name: str
+    lab_rating: float  # 1-5 stars
+    lab_location: str  # City/area
+    price: int  # Price at this lab
+    home_collection_available: bool
+    home_collection_fee: int
+    turnaround_time: str  # "24 hours", "Same day", "48 hours"
+    accreditation: str = "NABL"  # NABL, CAP, etc.
+
 class LabTest(BaseModel):
-    """Individual lab test model"""
+    """Individual lab test model with multiple lab offerings"""
     id: str
     name: str
     category: str  # "Blood Tests", "Radiology", "Organ Function", etc.
-    price: int
-    home_collection_available: bool
-    home_collection_fee: Optional[int] = 0
     sample_type: str  # "Blood", "Urine", "Stool", "Tissue", etc.
     fasting_required: bool
     preparation_instructions: str
-    turnaround_time: str  # "24 hours", "Same day", "48 hours"
     parameters_count: int  # Number of parameters measured
-    rating: float
+    labs_offering: List[LabOffering]  # Multiple labs offer this test
+    rating: float  # Average rating across all labs
     booking_count: int  # Popularity metric
     
 class LabPackage(BaseModel):
@@ -47,7 +56,8 @@ class CartItem(BaseModel):
     item_id: str  # Test ID or Package ID
     item_type: str  # "test" or "package"
     name: str
-    price: int
+    selected_lab: Optional[LabOffering] = None  # Selected lab for this test
+    price: int  # Price at selected lab
     
 class LabBooking(BaseModel):
     """Lab test booking model"""

@@ -342,39 +342,95 @@ async def handle_doctor_query(request: ChatRequest, history_tuples: list):
         raise HTTPException(status_code=500, detail=str(e))
 
 async def handle_lab_test_query(request: ChatRequest, history_tuples: list):
-    """Handle lab test booking queries with stateful cart"""
-    session_id = request.userLocation.get("session_id", "default_session")
-    session_state = lab_agent.session_manager.get_state(session_id)
-    intent_data = llm.parse_lab_test_intent(request.message, history_tuples, session_state)
+    """Handle lab test booking queries"""
+    # Parse intent with LLM (using GPT-OSS-120B)
+    intent_data = llm.parse_lab_test_intent(request.message, history_tuples)
+    
     intent_type = intent_data.get("type", "").lower().strip()
-    print(f"LAB: Intent={intent_type}, Cart={len(session_state['cart'])}")
+    print(f"DEBUG LAB: Parsed Intent Type: '{intent_type}'")
+    print(f"DEBUG LAB: Full Intent Data: {intent_data}")
     
+    # Handle chat intent
     if intent_type == "chat":
-        return ChatResponse(type="chat", message=intent_data.get("response", "How can I help?"))
+        return ChatResponse(
+            type="chat",
+            message=intent_data.get("response", "How can I help you with lab tests?")
+        )
     
+    # Handle search intent
     if intent_type == "search":
-        query = intent_data.get("query", "")
-        if isinstance(query, list):
-            query = " ".join(query)
-        results = lab_agent.search_tests(query, session_id, intent_data.get("filters", {}))
+        query = intent_data.get("query", request.message)
+        filters_obj = intent_data.get("filters", {})
+        filters = {}
+        if filters_obj.get("max_price"):
+            filters["max_price"] = filters_obj["max_price"]
+        if filters_obj.get("home_collection") is not None:
+            filters["home_collection"] = filters_obj["home_collection"]
+        if filters_obj.get("min_rating"):
+            filters["min_rating"] = filters_obj["min_rating"]
+        
+        results = lab_agent.search_tests(query, filters=filters)
+        
         if not results:
-            return ChatResponse(type="search", message=f"No tests found for '{query}'")
-        return ChatResponse(type="search", message=f"Found {len(results)} test(s)", 
-                           data={"tests": results, "session_id": session_id})
+            return ChatResponse(
+                type="search",
+                message=f"I couldn't find any tests matching '{query}'. Try a different search?"
+            )
+        
+        count = len(results)
+        top_test = results[0]
+        
+        message = f"Found {count} lab tests.\n\n"
+        message += f"Top match: {top_test['name']} - ₹{top_test['price']}"
+        if top_test['home_collection_available']:
+            message += f" (+₹{top_test['home_collection_fee']} home collection)"
+        
+        # Check for package recommendations
+        test_ids = [t['id'] for t in results[:3]]
+        package = lab_agent.recommend_package(test_ids)
+        if package:
+            message += f"\n\n💡 **Package Recommendation**: {package['name']}"
+            message += f"\nSave ₹{package['savings']} ({package['savings_percentage']}% off)"
+        
+        return ChatResponse(
+            type="search",
+            message=message,
+            data={"tests": results[:10], "count": count, "package": package}
+        )
     
-    if intent_type == "add_to_cart":
-        result = lab_agent.add_to_cart(session_id, intent_data.get("test_id"), intent_data.get("lab_id"))
-        return ChatResponse(type="cart_updated", message=result['message'], data=result)
+    # Handle filter intent
+    if intent_type == "filter":
+        filters_obj = intent_data.get("filters", {})
+        filters = {}
+        if filters_obj.get("max_price"):
+            filters["max_price"] = filters_obj["max_price"]
+        if filters_obj.get("home_collection") is not None:
+            filters["home_collection"] = filters_obj["home_collection"]
+        
+        # Re-search with filters (simplified - would use context in production)
+        query = intent_data.get("query", "blood")
+        results = lab_agent.search_tests(query, filters=filters)
+        
+        if not results:
+            return ChatResponse(
+                type="search",
+                message="No tests match your filters. Try adjusting them?"
+            )
+        
+        count = len(results)
+        message = f"Found {count} tests matching your criteria."
+        
+        return ChatResponse(
+            type="search",
+            message=message,
+            data={"tests": results[:10], "count": count}
+        )
     
-    if intent_type == "view_cart":
-        cart_data = lab_agent.view_cart(session_id)
-        if not cart_data['cart']:
-            return ChatResponse(type="chat", message="Cart is empty")
-        msg = f"Cart: {cart_data['cart_count']} tests, Total: ₹{cart_data['cart_total']}"
-        return ChatResponse(type="cart_view", message=msg, data=cart_data)
-    
-    return ChatResponse(type="chat", message="Search tests, add to cart, or ask questions!")
-
+    # Fallback
+    return ChatResponse(
+        type="chat",
+        message="I can help you search for lab tests. Try asking about specific tests like CBC, Thyroid, or HbA1c!"
+    )
 
 if __name__ == "__main__":
 
