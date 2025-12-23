@@ -377,9 +377,86 @@ async def handle_lab_test_query(request: ChatRequest, history_tuples: list):
     if intent_type == "view_cart":
         cart_data = lab_agent.view_cart(session_id)
         if not cart_data['cart']:
-            return ChatResponse(type="chat", message="Cart is empty")
-        msg = f"Cart: {cart_data['cart_count']} tests, Total: ₹{cart_data['cart_total']}"
+            return ChatResponse(type="chat", message="Your cart is empty. Search for tests to add!")
+        msg = f"🛒 **Your Cart:** {cart_data['cart_count']} test(s)\n\n"
+        for item in cart_data['cart']:
+            msg += f"• {item['test_name']} from {item['lab_name']} - ₹{item['price']}\n"
+        msg += f"\n**Total: ₹{cart_data['cart_total']}**\n\n"
+        msg += "Say **'proceed to book'** when ready!"
         return ChatResponse(type="cart_view", message=msg, data=cart_data)
+    
+    if intent_type == "availability":
+        # User wants to see available slots
+        cart_data = lab_agent.view_cart(session_id)
+        if not cart_data['cart']:
+            return ChatResponse(type="chat", message="Your cart is empty. Add tests before checking availability!")
+        
+        slots = lab_agent.get_available_slots(session_id)
+        if not slots:
+            return ChatResponse(type="chat", message="No slots available currently. Please try again later.")
+        
+        # Group slots by date for display
+        msg = f"📅 **Available Slots for {cart_data['cart_count']} test(s)**\n\n"
+        msg += f"💰 Total: ₹{cart_data['cart_total']}\n\n"
+        msg += "Please select a date and time slot from the options below:"
+        
+        return ChatResponse(
+            type="lab_slots", 
+            message=msg, 
+            data={"slots": slots, "cart": cart_data}
+        )
+    
+    if intent_type == "booking":
+        # User wants to book with selected slot
+        cart_data = lab_agent.view_cart(session_id)
+        if not cart_data['cart']:
+            return ChatResponse(type="chat", message="Your cart is empty. Add tests first!")
+        
+        slot_id = intent_data.get("slot_id")
+        date = intent_data.get("date")
+        time = intent_data.get("time")
+        collection_type = intent_data.get("collection_type", "lab_visit")
+        
+        # Generate booking reference
+        import random
+        import string
+        booking_ref = "LB" + "".join(random.choices(string.digits, k=8))
+        
+        # Calculate total with home collection fee if applicable
+        total = cart_data['cart_total']
+        home_fee = 0
+        if collection_type == "home_collection":
+            home_fee = 50  # Standard home collection fee
+            total += home_fee
+        
+        booking_result = {
+            "success": True,
+            "booking_reference": booking_ref,
+            "tests": cart_data['cart'],
+            "date": date or "Tomorrow",
+            "time": time or "9:00 AM - 11:00 AM",
+            "collection_type": collection_type,
+            "total": total,
+            "home_collection_fee": home_fee if collection_type == "home_collection" else 0
+        }
+        
+        # Clear cart after booking
+        lab_agent.clear_cart(session_id)
+        
+        msg = f"✅ **Booking Confirmed!**\n\n"
+        msg += f"📋 **Booking Reference:** `{booking_ref}`\n\n"
+        msg += f"**Tests Booked:**\n"
+        for item in booking_result['tests']:
+            msg += f"• {item['test_name']} from {item['lab_name']}\n"
+        msg += f"\n📅 **Date:** {booking_result['date']}\n"
+        msg += f"⏰ **Time:** {booking_result['time']}\n"
+        msg += f"🏠 **Collection:** {'Home Sample Collection' if collection_type == 'home_collection' else 'Lab Visit'}\n"
+        if home_fee > 0:
+            msg += f"🚗 **Home Collection Fee:** ₹{home_fee}\n"
+        msg += f"\n💰 **Total Amount:** ₹{total}\n\n"
+        msg += "You will receive an SMS confirmation shortly. Thank you!"
+        
+        return ChatResponse(type="booking_confirmed", message=msg, data=booking_result)
     
     return ChatResponse(type="chat", message="Search tests, add to cart, or ask questions!")
 
