@@ -148,11 +148,57 @@ async def chat(request: ChatRequest):
         
         # Handle filter intent
         if intent_type == "filter":
-            # Note: Filtering requires cached results from frontend
-            # This is a simplified version - real implementation would need session management
+            # Extract filter parameters from LLM intent
+            filters_obj = intent_data.get("filters", {})
+            filters = {}
+            if filters_obj.get("max_fees"):
+                filters["max_fees"] = filters_obj["max_fees"]
+            if filters_obj.get("min_rating"):
+                filters["min_rating"] = filters_obj["min_rating"]
+            
+            # Note: We need to know what specialty was searched before
+            # For simplicity, we'll ask the user to specify the specialty again
+            # A production system would cache this in session state
+            
+            # Extract query from previous context or ask user
+            query = intent_data.get("query")
+            if not query:
+                return ChatResponse(
+                    type="chat",
+                    message="What specialty of doctor are you filtering for? (e.g., Dermatologist, General Physician)"
+                )
+            
+            # Perform search with filters
+            results = agent.find_doctors(query, lat, lng, filters=filters)
+            
+            if not results:
+                return ChatResponse(
+                    type="search",
+                    message=f"I couldn't find any doctors matching your criteria. Try adjusting your filters?",
+                )
+            
+            top_result = results[0]
+            count = len(results)
+            
+            filter_desc = []
+            if filters.get("max_fees"):
+                filter_desc.append(f"under ₹{filters['max_fees']}")
+            if filters.get("min_rating"):
+                filter_desc.append(f"{filters['min_rating']}+ stars")
+            
+            filter_text = " and ".join(filter_desc) if filter_desc else "your criteria"
+            
+            message = f"Found {count} doctors matching {filter_text}.\n\n"
+            message += f"Top match: {top_result['name']} ({top_result['specialty']}) - "
+            message += f"₹{top_result['fees']}, {top_result['rating']} stars, {top_result['distance']} away."
+            
             return ChatResponse(
-                type="filter",
-                message="Filtering requires cached results. Please use the frontend filter logic."
+                type="search",
+                message=message,
+                data={
+                    "doctors": results[:5],
+                    "count": count
+                }
             )
         
         # Handle slots intent
