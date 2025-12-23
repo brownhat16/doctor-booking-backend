@@ -75,7 +75,10 @@ async def chat(request: ChatRequest):
         # Parse intent with LLM
         intent_data = llm.parse_doctor_search_intent(request.message, history_tuples)
         
-        intent_type = intent_data.get("type")
+        intent_type = intent_data.get("type", "").lower().strip()
+        print(f"DEBUG: Parsed Intent Type: '{intent_type}'")
+        print(f"DEBUG: Full Intent Data: {intent_data}")
+        
         lat = request.userLocation.get("lat", 18.5204)
         lng = request.userLocation.get("lng", 73.8567)
         
