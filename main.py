@@ -345,9 +345,24 @@ async def handle_lab_test_query(request: ChatRequest, history_tuples: list):
     """Handle lab test booking queries with stateful cart"""
     session_id = request.userLocation.get("session_id", "default_session")
     session_state = lab_agent.session_manager.get_state(session_id)
+    
+    # Keyword-based override for booking phrases (fallback if LLM misclassifies)
+    booking_keywords = [
+        "proceed to book", "proceed", "book my test", "book my tests", "confirm booking",
+        "show slots", "available slots", "what are the slots", "when can i book",
+        "book now", "schedule", "book it", "continue to book", "yes book"
+    ]
+    msg_lower = request.message.lower().strip()
+    
+    # If cart has items and user says something booking-related, force availability
+    intent_override = None
+    if session_state['cart'] and any(kw in msg_lower for kw in booking_keywords):
+        intent_override = "availability"
+        print(f"LAB: Keyword override activated for '{request.message}'")
+    
     intent_data = llm.parse_lab_test_intent(request.message, history_tuples, session_state)
-    intent_type = intent_data.get("type", "").lower().strip()
-    print(f"LAB: Intent={intent_type}, Cart={len(session_state['cart'])}")
+    intent_type = intent_override or intent_data.get("type", "").lower().strip()
+    print(f"LAB: Intent={intent_type}, Cart={len(session_state['cart'])}, Override={intent_override}")
     
     if intent_type == "chat":
         return ChatResponse(type="chat", message=intent_data.get("response", "How can I help?"))
