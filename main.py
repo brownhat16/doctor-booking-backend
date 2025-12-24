@@ -36,6 +36,7 @@ class ChatRequest(BaseModel):
     message: str
     history: List[Message]
     userLocation: Dict[str, float]
+    session_id: Optional[str] = None  # For persistent cart
 
 class ChatResponse(BaseModel):
     type: str
@@ -343,7 +344,8 @@ async def handle_doctor_query(request: ChatRequest, history_tuples: list):
 
 async def handle_lab_test_query(request: ChatRequest, history_tuples: list):
     """Handle lab test booking queries with stateful cart"""
-    session_id = request.userLocation.get("session_id", "default_session")
+    # Use session_id from request, with fallback to default
+    session_id = request.session_id or "default_session"
     session_state = lab_agent.session_manager.get_state(session_id)
     
     # Keyword-based override for booking phrases (fallback if LLM misclassifies)
