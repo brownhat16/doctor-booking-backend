@@ -194,6 +194,12 @@ class LabTestDatabase:
     def _create_packages(self):
         """Create test packages with recommendations"""
         
+        # Helper to get minimum price from labs_offering
+        def get_min_price(test):
+            if test.labs_offering:
+                return min(lab.price for lab in test.labs_offering)
+            return 500  # Default fallback
+        
         # Find tests by name
         def find_test(keyword):
             return next((t for t in self.tests if keyword.lower() in t.name.lower()), None)
@@ -201,13 +207,13 @@ class LabTestDatabase:
         # Package 1: Full Body Checkup
         cbc = find_test("Complete Blood Count")
         lipid = find_test("Lipid Profile")
-        thyroid = find_test("Thyroid Profile")
+        thyroid = find_test("Thyroid")
         liver = find_test("Liver Function")
         kidney = find_test("Kidney Function")
         
         if all([cbc, lipid, thyroid, liver, kidney]):
             tests = [cbc, lipid, thyroid, liver, kidney]
-            original = sum(t.price for t in tests)
+            original = sum(get_min_price(t) for t in tests)
             package_price = int(original * 0.65)  # 35% discount
             
             pkg = LabPackage(
@@ -232,7 +238,7 @@ class LabTestDatabase:
         
         if all([hba1c, fbs, kidney_test]):
             tests = [hba1c, fbs, kidney_test]
-            original = sum(t.price for t in tests)
+            original = sum(get_min_price(t) for t in tests)
             package_price = int(original * 0.70)
             
             pkg = LabPackage(
@@ -257,7 +263,7 @@ class LabTestDatabase:
         
         if all([lipid_test, ecg, cbc_test]):
             tests = [lipid_test, ecg, cbc_test]
-            original = sum(t.price for t in tests)
+            original = sum(get_min_price(t) for t in tests)
             package_price = int(original * 0.75)
             
             pkg = LabPackage(
