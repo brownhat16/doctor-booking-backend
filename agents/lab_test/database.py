@@ -21,20 +21,64 @@ class LabTestDatabase:
             {"id": "lab_005", "name": "Apollo Diagnostics", "rating": 4.9, "location": "Shivajinagar", "accreditation": "NABL, CAP"},
         ]
         
-        # Blood Tests - now with multiple lab offerings
+        # Blood Tests - now with multiple lab offerings and common aliases
         blood_tests_data = [
+            # Common Blood Tests
             ("CBC", "Complete Blood Count", 25, False, "No special preparation"),
-            ("Lipid Profile", "Cholesterol & Triglycerides", 8, True, "12-14 hours fasting required"),
-            ("Thyroid Profile", "TSH, T3, T4", 3, False, "Can be done anytime"),
-            ("HbA1c", "Diabetes Monitoring", 1, False, "No fasting needed"),
-            ("Liver Function Test (LFT)", "Liver Enzymes", 12, True, "8-12 hours fasting"),
-            ("Kidney Function Test (KFT)", "Renal Profile", 8, True, "8 hours fasting"),
+            ("Lipid Profile", "Lipid Profile (Cholesterol)", 8, True, "12-14 hours fasting required"),
+            ("Thyroid Profile", "Thyroid Function Test (TFT)", 3, False, "Can be done anytime"),
+            ("Liver Function Test", "Liver Function Test (LFT)", 12, True, "8-12 hours fasting"),
+            ("Kidney Function Test", "Kidney Function Test (KFT/RFT)", 8, True, "8 hours fasting"),
+            ("ESR", "Erythrocyte Sedimentation Rate (ESR)", 1, False, "No preparation"),
+            ("CRP", "C-Reactive Protein (CRP)", 1, False, "No preparation"),
+            ("Uric Acid", "Uric Acid Test", 1, True, "Fasting preferred"),
+            
+            # Diabetes/Sugar Tests
+            ("FBS", "Fasting Blood Sugar (FBS)", 1, True, "8-12 hours fasting required"),
+            ("PPBS", "Post Prandial Blood Sugar (PPBS)", 1, False, "2 hours after meal"),
+            ("RBS", "Random Blood Sugar (RBS)", 1, False, "No preparation"),
+            ("HbA1c", "HbA1c (Glycated Hemoglobin)", 1, False, "No fasting needed"),
+            ("Glucose Tolerance", "Glucose Tolerance Test (GTT)", 4, True, "Overnight fasting, test takes 2-3 hours"),
+            ("Blood Sugar", "Blood Sugar Test", 1, True, "Fasting preferred"),
+            ("Sugar Level", "Blood Sugar Level Test", 1, True, "8 hours fasting"),
+            ("Diabetes Screening", "Diabetes Screening Panel", 3, True, "Fasting required"),
+            
+            # Vitamins & Minerals
             ("Vitamin D", "Vitamin D (25-OH)", 1, False, "No preparation needed"),
-            ("Vitamin B12", "B12 Levels", 1, False, "No preparation"),
-            ("Iron Studies", "Serum Iron Profile", 3, True, "Morning sample preferred"),
-            ("ESR", "Erythrocyte Sedimentation Rate", 1, False, "No preparation"),
-            ("CRP", "C-Reactive Protein", 1, False, "No preparation"),
-            ("Fasting Blood Sugar", "FBS", 1, True, "8-12 hours fasting required"),
+            ("Vitamin B12", "Vitamin B12 Level", 1, False, "No preparation"),
+            ("Vitamin B Complex", "Vitamin B Complex Panel", 6, False, "No preparation"),
+            ("Iron Studies", "Iron Studies (Serum Iron Profile)", 3, True, "Morning sample preferred"),
+            ("Ferritin", "Serum Ferritin", 1, False, "No preparation"),
+            ("Calcium", "Serum Calcium", 1, True, "Fasting preferred"),
+            ("Magnesium", "Serum Magnesium", 1, False, "No preparation"),
+            ("Zinc", "Serum Zinc", 1, False, "No preparation"),
+            ("Folate", "Folic Acid (Folate) Level", 1, False, "No preparation"),
+            
+            # Hormones
+            ("Testosterone", "Total Testosterone", 1, True, "Morning sample, fasting preferred"),
+            ("Prolactin", "Prolactin Level", 1, False, "Morning sample preferred"),
+            ("Cortisol", "Serum Cortisol", 1, True, "Morning sample required"),
+            ("Estrogen", "Estrogen (Estradiol) Level", 1, False, "No preparation"),
+            ("Progesterone", "Progesterone Level", 1, False, "No preparation"),
+            ("FSH LH", "FSH & LH Levels", 2, False, "Day 2-3 of menstrual cycle"),
+            ("AMH", "Anti-Mullerian Hormone (AMH)", 1, False, "No preparation"),
+            ("Insulin Fasting", "Fasting Insulin Level", 1, True, "8-12 hours fasting"),
+            
+            # Cardiac Markers
+            ("Troponin", "Troponin I/T", 1, False, "Emergency test"),
+            ("BNP", "Brain Natriuretic Peptide (BNP)", 1, False, "No preparation"),
+            ("Homocysteine", "Homocysteine Level", 1, True, "Fasting preferred"),
+            ("Lipid Profile Extended", "Advanced Lipid Profile", 12, True, "12-14 hours fasting"),
+            
+            # Coagulation
+            ("PT INR", "Prothrombin Time (PT/INR)", 2, False, "No preparation"),
+            ("APTT", "Activated Partial Thromboplastin Time", 1, False, "No preparation"),
+            ("D-Dimer", "D-Dimer Test", 1, False, "No preparation"),
+            
+            # Electrolytes
+            ("Electrolytes", "Electrolyte Panel (Na, K, Cl)", 3, False, "No preparation"),
+            ("Sodium", "Serum Sodium", 1, False, "No preparation"),
+            ("Potassium", "Serum Potassium", 1, False, "No preparation"),
         ]
         
         for idx, (short_name, full_name, param_count, fasting, prep) in enumerate(blood_tests_data):
@@ -291,25 +335,76 @@ class LabTestDatabase:
                 return pkg
         return None
     
-    def get_available_slots(self, collection_type: str) -> List[LabSlot]:
-        """Generate available time slots"""
+    def get_available_slots(self, collection_type: str = "both") -> List[LabSlot]:
+        """Generate available time slots for home collection and lab visits"""
         slots = []
         base_date = date.today()
         
+        # Time slots differ based on collection type
+        home_times = [
+            ("06:00", "7:00 AM"),
+            ("07:00", "8:00 AM"),
+            ("08:00", "9:00 AM"),
+            ("09:00", "10:00 AM"),
+            ("10:00", "11:00 AM"),
+            ("11:00", "12:00 PM"),
+        ]
+        
+        lab_times = [
+            ("08:00", "9:00 AM"),
+            ("09:00", "10:00 AM"),
+            ("10:00", "11:00 AM"),
+            ("11:00", "12:00 PM"),
+            ("12:00", "1:00 PM"),
+            ("14:00", "3:00 PM"),
+            ("15:00", "4:00 PM"),
+            ("16:00", "5:00 PM"),
+            ("17:00", "6:00 PM"),
+        ]
+        
         for day_offset in range(7):  # Next 7 days
             slot_date = base_date + timedelta(days=day_offset)
+            date_str = slot_date.isoformat()
             
-            # Morning slots
-            for hour in [8, 9, 10, 11]:
-                slot = LabSlot(
-                    slot_id=f"slot_{slot_date.isoformat()}_{hour:02d}00",
-                    date=slot_date.isoformat(),
-                    time_range=f"{hour:02d}:00-{hour+1:02d}:00 AM",
-                    collection_type=collection_type,
-                    available=random.choice([True, True, True, False]),  # 75% availability
-                    lab_name="CityCare Labs" if collection_type == "lab" else None,
-                    lab_address="Sector 12, Pune" if collection_type == "lab" else None
-                )
-                slots.append(slot)
+            # Skip Sunday (closed)
+            if slot_date.weekday() == 6:
+                continue
+            
+            # Generate home collection slots
+            if collection_type in ["home", "both", "home_collection"]:
+                for time_key, time_display in home_times:
+                    if random.random() > 0.2:  # 80% availability
+                        slot = LabSlot(
+                            slot_id=f"home_{date_str}_{time_key}",
+                            date=date_str,
+                            time=time_display,
+                            time_range=time_display,
+                            collection_type="home_collection",
+                            available=True,
+                            lab_name=None,
+                            lab_address=None
+                        )
+                        slots.append(slot)
+            
+            # Generate lab visit slots
+            if collection_type in ["lab", "both", "lab_visit"]:
+                for lab in [
+                    {"name": "Ruby Hall Clinic", "address": "Pune Central"},
+                    {"name": "Apollo Diagnostics", "address": "Shivajinagar"},
+                    {"name": "CityCare Labs", "address": "Koregaon Park"}
+                ]:
+                    for time_key, time_display in lab_times:
+                        if random.random() > 0.3:  # 70% availability
+                            slot = LabSlot(
+                                slot_id=f"lab_{lab['name'].replace(' ', '_')}_{date_str}_{time_key}",
+                                date=date_str,
+                                time=time_display,
+                                time_range=time_display,
+                                collection_type="lab_visit",
+                                available=True,
+                                lab_name=lab["name"],
+                                lab_address=lab["address"]
+                            )
+                            slots.append(slot)
         
-        return [s for s in slots if s.available]
+        return slots

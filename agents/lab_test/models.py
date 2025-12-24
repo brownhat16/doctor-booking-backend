@@ -45,8 +45,9 @@ class LabSlot(BaseModel):
     """Sample collection slot model"""
     slot_id: str
     date: str  # ISO format: "2025-12-24"
+    time: str  # "7:00 AM" - simple display time
     time_range: str  # "08:00-09:00 AM"
-    collection_type: str  # "home" or "lab"
+    collection_type: str  # "home_collection" or "lab_visit"
     available: bool
     lab_name: Optional[str] = None  # For lab visits
     lab_address: Optional[str] = None
